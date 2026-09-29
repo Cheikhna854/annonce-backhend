@@ -19,10 +19,16 @@ const FRONTEND_URL =
 // ==========================================
 // MIDDLEWARES
 // ==========================================
-
 app.use(cors({
-  origin: FRONTEND_URL,
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Bloqué par CORS'));
+    }
+  },
   credentials: true
+  
 }));
 
 app.use(express.json());
