@@ -19,16 +19,27 @@ const FRONTEND_URL =
 // ==========================================
 // MIDDLEWARES
 // ==========================================
+
+// Liste des origines autorisées + gestion dynamique de Vercel et localhost
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Bloqué par CORS'));
+    // 1. Autoriser les requêtes sans origine (Mobile, Postman, etc.)
+    if (!origin) return callback(null, true);
+
+    // 2. Autoriser si l'origine correspond à FRONTEND_URL, localhost ou n'importe quel sous-domaine Vercel
+    if (
+      origin === FRONTEND_URL ||
+      origin.includes('localhost') ||
+      origin.endsWith('.vercel.app')
+    ) {
+      return callback(null, true);
     }
+
+    return callback(new Error('Bloqué par la politique CORS'));
   },
-  credentials: true
-  
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
@@ -71,7 +82,9 @@ app.use((req, res) => {
 });
 
 // ==========================================
-// Démarrer l'API uniquement lorsque MongoDB est disponible.
+// DÉMARRAGE DU SERVEUR
+// ==========================================
+
 const startServer = async () => {
   await connectDB();
   app.listen(PORT, '0.0.0.0', () => {
