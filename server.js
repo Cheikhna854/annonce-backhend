@@ -1,6 +1,3 @@
-const dns = require('dns');
-dns.setServers(['8.8.8.8', '8.8.4.4']);
-
 require('dotenv').config();
 
 const express = require('express');
@@ -68,16 +65,13 @@ app.use((req, res) => {
 });
 
 // ==========================================
-// DÉMARRAGE DU SERVEUR
-// ==========================================
+// Démarrer l'API uniquement lorsque MongoDB est disponible.
+const startServer = async () => {
+  await connectDB();
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Serveur lancé sur le port ${PORT}`);
+    console.log(`🌐 Frontend autorisé : ${FRONTEND_URL}`);
+  });
+};
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Serveur lancé sur le port ${PORT}`);
-  console.log(`🌐 Frontend autorisé : ${FRONTEND_URL}`);
-});
-
-// ==========================================
-// CONNEXION MONGODB
-// ==========================================
-
-connectDB();
+startServer();
