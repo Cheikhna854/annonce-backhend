@@ -30,7 +30,7 @@ const admin = (req, res, next) => {
 };
 
 const vendeur = (req, res, next) => {
-  if (req.user && (req.user.role === 'prestataire' || req.user.role === 'admin')) return next();
+  if (req.user?.role === 'prestataire') return next();
   return res.status(403).json({ message: 'Accès réservé aux prestataires' });
 };
 

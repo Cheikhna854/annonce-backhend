@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const router = express.Router();
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
+const upload = require('../middleware/upload');
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '30d' });
@@ -30,6 +31,7 @@ router.post('/inscription', async (req, res) => {
       nom: user.nom,
       prenom: user.prenom,
       email: user.email,
+      telephone: user.telephone,
       role: user.role,
       token: generateToken(user._id),
     });
@@ -60,6 +62,7 @@ router.post('/connexion', async (req, res) => {
       nom: user.nom,
       prenom: user.prenom,
       email: user.email,
+      telephone: user.telephone,
       photo: user.photo,
       role: user.role,
       token: generateToken(user._id),
@@ -73,14 +76,15 @@ router.get('/profil', protect, async (req, res) => {
   res.json(req.user);
 });
 
-router.put('/profil', protect, async (req, res) => {
+router.put('/profil', protect, upload.single('photo'), async (req, res) => {
   try {
     const { nom, prenom, telephone, photo } = req.body;
-    const user = await User.findById(req.user._id);
+    const user = await User.findById(req.user._id).select('-motDePasse');
     if (nom) user.nom = nom;
     if (prenom) user.prenom = prenom;
-    if (telephone) user.telephone = telephone;
-    if (photo) user.photo = photo;
+    if (typeof telephone === 'string') user.telephone = telephone;
+    if (req.file) user.photo = `/uploads/${req.file.filename}`;
+    else if (photo) user.photo = photo;
     await user.save();
     res.json(user);
   } catch (err) {

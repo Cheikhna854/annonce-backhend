@@ -3,10 +3,33 @@ const router = express.Router();
 const Category = require('../models/Category');
 const { protect, admin } = require('../middleware/auth');
 
+const categoriesParDefaut = [
+  'Immobilier',
+  'Automobile',
+  'Emploi',
+  'Téléphones',
+  'Informatique',
+  'Mode',
+  'Services',
+  'Électronique',
+];
+
 // GET toutes les catégories
 router.get('/', async (req, res) => {
-  const categories = await Category.find().sort('nom');
-  res.json(categories);
+  try {
+    let categories = await Category.find().sort('nom');
+    if (categories.length === 0) {
+      try {
+        await Category.insertMany(categoriesParDefaut.map((nom) => ({ nom })), { ordered: false });
+      } catch (err) {
+        if (err.code !== 11000) throw err;
+      }
+      categories = await Category.find().sort('nom');
+    }
+    res.json(categories);
+  } catch (err) {
+    res.status(500).json({ message: 'Impossible de charger les catégories', error: err.message });
+  }
 });
 
 // POST créer (admin)

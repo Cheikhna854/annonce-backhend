@@ -27,7 +27,7 @@ router.get('/', async (req, res) => {
 
     const annonces = await Annonce.find(filtre)
       .populate('categorie', 'nom icone')
-      .populate('utilisateur', 'nom prenom photo')
+      .populate('utilisateur', 'nom prenom photo telephone')
       .sort(sort);
 
     res.json(annonces);
@@ -42,6 +42,28 @@ router.get('/mes-annonces', protect, vendeur, async (req, res) => {
     .populate('categorie', 'nom icone')
     .sort('-createdAt');
   res.json(annonces);
+});
+
+// GET profil public d'un vendeur et ses annonces disponibles
+router.get('/vendeur/:id', async (req, res) => {
+  try {
+    const vendeurPublic = await User.findOne({ _id: req.params.id, role: 'prestataire', isBlocked: false })
+      .select('nom prenom photo telephone createdAt');
+    if (!vendeurPublic) return res.status(404).json({ message: 'Vendeur introuvable' });
+
+    const annonces = await Annonce.find({
+      utilisateur: vendeurPublic._id,
+      actif: true,
+      statut: 'validee',
+    })
+      .populate('categorie', 'nom icone')
+      .populate('utilisateur', 'nom prenom photo telephone')
+      .sort('-createdAt');
+
+    res.json({ vendeur: vendeurPublic, annonces });
+  } catch (err) {
+    res.status(500).json({ message: 'Erreur serveur', error: err.message });
+  }
 });
 
 // GET une annonce (détail)
@@ -76,7 +98,7 @@ router.post('/', protect, vendeur, upload.array('images', 5), async (req, res) =
       ville,
       images,
       utilisateur: req.user._id,
-      statut: 'en_attente',
+      statut: 'validee',
     });
 
     res.status(201).json(annonce);
@@ -86,7 +108,7 @@ router.post('/', protect, vendeur, upload.array('images', 5), async (req, res) =
 });
 
 // PUT modifier une annonce
-router.put('/:id', protect, async (req, res) => {
+router.put('/:id', protect, vendeur, async (req, res) => {
   try {
     const annonce = await Annonce.findById(req.params.id);
     if (!annonce) return res.status(404).json({ message: 'Annonce introuvable' });
@@ -102,7 +124,7 @@ router.put('/:id', protect, async (req, res) => {
 });
 
 // PATCH activer/désactiver
-router.patch('/:id/statut', protect, async (req, res) => {
+router.patch('/:id/statut', protect, vendeur, async (req, res) => {
   try {
     const annonce = await Annonce.findById(req.params.id);
     if (!annonce) return res.status(404).json({ message: 'Annonce introuvable' });
@@ -118,7 +140,7 @@ router.patch('/:id/statut', protect, async (req, res) => {
 });
 
 // DELETE supprimer
-router.delete('/:id', protect, async (req, res) => {
+router.delete('/:id', protect, vendeur, async (req, res) => {
   try {
     const annonce = await Annonce.findById(req.params.id);
     if (!annonce) return res.status(404).json({ message: 'Annonce introuvable' });

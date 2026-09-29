@@ -12,9 +12,11 @@ router.get('/stats', async (req, res) => {
     const totalUsers = await User.countDocuments();
     const totalAnnonces = await Annonce.countDocuments();
     const enAttente = await Annonce.countDocuments({ statut: 'en_attente' });
-    const signalements = await Annonce.countDocuments({ signalements: { $gt: 0 } });
+    const [signalementStats] = await Annonce.aggregate([
+      { $group: { _id: null, total: { $sum: '$signalements' } } },
+    ]);
 
-    res.json({ totalUsers, totalAnnonces, enAttente, signalements });
+    res.json({ totalUsers, totalAnnonces, enAttente, signalements: signalementStats?.total || 0 });
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur', error: err.message });
   }
@@ -53,7 +55,22 @@ router.patch('/annonces/:id/valider', async (req, res) => {
   try {
     const annonce = await Annonce.findByIdAndUpdate(
       req.params.id,
-      { statut: 'validee', signalements: 0 },
+      { statut: 'validee' },
+      { new: true }
+    );
+    if (!annonce) return res.status(404).json({ message: 'Annonce introuvable' });
+    res.json(annonce);
+  } catch (err) {
+    res.status(500).json({ message: 'Erreur serveur', error: err.message });
+  }
+});
+
+// PATCH clôturer les signalements d'une annonce après examen
+router.patch('/annonces/:id/signalements/traiter', async (req, res) => {
+  try {
+    const annonce = await Annonce.findByIdAndUpdate(
+      req.params.id,
+      { signalements: 0 },
       { new: true }
     );
     if (!annonce) return res.status(404).json({ message: 'Annonce introuvable' });
