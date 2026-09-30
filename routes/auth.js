@@ -1,5 +1,6 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const router = express.Router();
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
@@ -40,19 +41,30 @@ router.post('/inscription', async (req, res) => {
   }
 });
 
+// ROUTE AVEC LES TRACES DE DÉBOGAGE
 router.post('/connexion', async (req, res) => {
   try {
     const { email, motDePasse } = req.body;
-    const user = await User.findOne({ email: email?.toLowerCase() });
+
+    const cleanEmail = email?.trim().toLowerCase();
+    const cleanPassword = motDePasse?.trim();
+
+    if (!cleanEmail || !cleanPassword) {
+      return res.status(400).json({ message: 'Veuillez remplir tous les champs' });
+    }
+
+    const user = await User.findOne({ email: cleanEmail });
 
     if (!user) {
       return res.status(401).json({ message: 'Email ou mot de passe incorrect' });
     }
+
     if (user.isBlocked) {
       return res.status(403).json({ message: 'Ce compte a été bloqué' });
     }
 
-    const match = await user.comparePassword(motDePasse);
+    const match = await bcrypt.compare(cleanPassword, user.motDePasse);
+
     if (!match) {
       return res.status(401).json({ message: 'Email ou mot de passe incorrect' });
     }
@@ -68,10 +80,10 @@ router.post('/connexion', async (req, res) => {
       token: generateToken(user._id),
     });
   } catch (err) {
+    console.error('Erreur connexion:', err);
     res.status(500).json({ message: 'Erreur serveur', error: err.message });
   }
 });
-
 router.get('/profil', protect, async (req, res) => {
   res.json(req.user);
 });
