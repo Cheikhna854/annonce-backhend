@@ -1,10 +1,23 @@
-const multer = require('multer');
+﻿const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-const uploadDir = path.join(__dirname, '..', 'uploads');
+// Configure UPLOADS_DIR to point at a persistent disk in production.
+const uploadDir = process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Keep existing local images when switching to a persistent disk.
+const previousUploadDir = path.join(__dirname, '..', 'uploads');
+if (path.resolve(previousUploadDir) !== path.resolve(uploadDir) && fs.existsSync(previousUploadDir)) {
+  for (const filename of fs.readdirSync(previousUploadDir)) {
+    const previousFile = path.join(previousUploadDir, filename);
+    const persistentFile = path.join(uploadDir, filename);
+    if (fs.statSync(previousFile).isFile() && !fs.existsSync(persistentFile)) {
+      fs.copyFileSync(previousFile, persistentFile);
+    }
+  }
 }
 
 const storage = multer.diskStorage({
@@ -26,3 +39,5 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({ storage, fileFilter, limits: { fileSize: 5 * 1024 * 1024 } });
 
 module.exports = upload;
+
+

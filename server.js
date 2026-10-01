@@ -11,26 +11,20 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 app.use(cors({
   origin(origin, callback) {
-    // Autorise les requêtes sans Origin (Postman, appels serveur à serveur).
     if (!origin) return callback(null, true);
-
     let hostname;
     try {
       hostname = new URL(origin).hostname;
     } catch {
-      return callback(new Error('Origine CORS invalide'));
+      return callback(new Error('Invalid CORS origin'));
     }
-
     if (
       origin === FRONTEND_URL ||
       hostname === 'localhost' ||
       hostname === '127.0.0.1' ||
       hostname.endsWith('.vercel.app')
-    ) {
-      return callback(null, true);
-    }
-
-    return callback(new Error('Origine bloquée par la politique CORS'));
+    ) return callback(null, true);
+    return callback(new Error('Origin blocked by CORS policy'));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -38,7 +32,7 @@ app.use(cors({
 }));
 
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(process.env.UPLOADS_DIR || path.join(__dirname, 'uploads'), { maxAge: '1d' }));
 
 app.get('/', (req, res) => {
   res.json({
@@ -58,25 +52,27 @@ app.use((req, res) => {
   res.status(404).json({ message: 'Route introuvable' });
 });
 
-const startServer = async () => {
+async function startServer() {
   try {
-    // L'API ne doit pas annoncer qu'elle est prête si MongoDB est inaccessible.
+    console.log('Connexion a MongoDB...');
     await connectDB();
-
     const server = app.listen(PORT, '0.0.0.0', () => {
-      console.log(`🚀 Serveur lancé sur le port ${PORT}`);
-      console.log(`🌐 Frontend autorisé : ${FRONTEND_URL}`);
+      console.log(`Server listening on port ${PORT}`);
+      console.log(`Allowed frontend: ${FRONTEND_URL}`);
     });
-
     server.on('error', (error) => {
-      console.error(`❌ Impossible de démarrer le serveur : ${error.message}`);
-      process.exitCode = 1;
+      console.error(`Server startup error: ${error.message}`);
+      process.exit(1);
     });
   } catch (error) {
-    console.error(`❌ Erreur MongoDB : ${error.message}`);
-    console.error("Vérifie MONGO_URI, le cluster Atlas et l'IP Access List (0.0.0.0/0 pour autoriser toutes les IP).");
-    process.exitCode = 1;
+    console.error(`Erreur de connexion MongoDB: ${error.message}`);
+    if (error.code === 'ETIMEOUT' && error.message.includes('querySrv')) {
+      console.error("Le DNS SRV d'Atlas ne repond pas a temps. Verifiez votre DNS et votre connexion reseau.");
+    } else {
+      console.error('Verifiez MONGO_URI, le cluster Atlas et la liste Network Access.');
+    }
+    process.exit(1);
   }
-};
+}
 
 startServer();
