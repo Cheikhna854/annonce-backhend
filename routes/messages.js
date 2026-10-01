@@ -1,40 +1,59 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const Message = require('../models/Message');
+const User = require('../models/User');
 const { protect } = require('../middleware/auth');
 
-// GET liste des conversations (dernier message par contact)
+// GET latest conversations. Aggregate in MongoDB instead of loading/populating every message in Node.
 router.get('/conversations', protect, async (req, res) => {
   try {
     const userId = req.user._id;
-    const messages = await Message.find({
-      $or: [{ expediteur: userId }, { recepteur: userId }],
-    })
-      .sort('-createdAt')
-      .populate('expediteur', 'nom prenom photo')
-      .populate('recepteur', 'nom prenom photo')
-      .populate('annonce', 'titre images prix');
+    const conversations = await Message.aggregate([
+      { $match: { $or: [{ expediteur: userId }, { recepteur: userId }] } },
+      { $sort: { createdAt: -1, _id: -1 } },
+      {
+        $group: {
+          _id: { $cond: [{ $eq: ['$expediteur', userId] }, '$recepteur', '$expediteur'] },
+          dernierMessage: {
+            $first: {
+              _id: '$_id', expediteur: '$expediteur', recepteur: '$recepteur',
+              annonce: '$annonce', contenu: '$contenu', lu: '$lu', createdAt: '$createdAt',
+            },
+          },
+          nonLus: {
+            $sum: {
+              $cond: [
+                { $and: [{ $eq: ['$recepteur', userId] }, { $eq: ['$lu', false] }] },
+                1,
+                0,
+              ],
+            },
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: User.collection.name,
+          localField: '_id',
+          foreignField: '_id',
+          pipeline: [{ $project: { _id: 1, nom: 1, prenom: 1, photo: 1 } }],
+          as: 'contact',
+        },
+      },
+      { $unwind: '$contact' },
+      { $sort: { 'dernierMessage.createdAt': -1 } },
+      { $limit: 50 },
+      { $project: { _id: 0, contact: 1, dernierMessage: 1, nonLus: 1 } },
+    ]);
 
-    const conversations = {};
-    messages.forEach((msg) => {
-      const contact =
-        msg.expediteur._id.toString() === userId.toString() ? msg.recepteur : msg.expediteur;
-      const key = contact._id.toString();
-      if (!conversations[key]) {
-        conversations[key] = { contact, dernierMessage: msg, nonLus: 0 };
-      }
-      if (msg.recepteur._id.toString() === userId.toString() && !msg.lu) {
-        conversations[key].nonLus += 1;
-      }
-    });
-
-    res.json(Object.values(conversations));
+    return res.json(conversations);
   } catch (err) {
-    res.status(500).json({ message: 'Erreur serveur', error: err.message });
+    console.error('Erreur chargement conversations:', err.message);
+    return res.status(500).json({ message: 'Impossible de charger les conversations.' });
   }
 });
 
-// GET messages avec un contact précis
+// GET messages with a specific contact
 router.get('/:contactId', protect, async (req, res) => {
   try {
     const userId = req.user._id;
@@ -52,13 +71,14 @@ router.get('/:contactId', protect, async (req, res) => {
       { lu: true }
     );
 
-    res.json(messages);
+    return res.json(messages);
   } catch (err) {
-    res.status(500).json({ message: 'Erreur serveur', error: err.message });
+    console.error('Erreur chargement messages:', err.message);
+    return res.status(500).json({ message: 'Erreur serveur.' });
   }
 });
 
-// POST envoyer un message
+// POST send a message
 router.post('/', protect, async (req, res) => {
   try {
     const { recepteur, contenu, annonce } = req.body;
@@ -71,9 +91,10 @@ router.post('/', protect, async (req, res) => {
       contenu,
       annonce: annonce || undefined,
     });
-    res.status(201).json(message);
+    return res.status(201).json(message);
   } catch (err) {
-    res.status(500).json({ message: 'Erreur serveur', error: err.message });
+    console.error('Erreur envoi message:', err.message);
+    return res.status(500).json({ message: 'Erreur serveur.' });
   }
 });
 

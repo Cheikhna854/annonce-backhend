@@ -11,7 +11,14 @@ router.get('/', async (req, res) => {
     const { q, categorie, ville, prixMin, prixMax, tri } = req.query;
     const filtre = { actif: true, statut: 'validee' };
 
-    if (q) filtre.$text = { $search: q };
+    if (q?.trim()) {
+      const recherche = q.trim().replace(/[^\p{L}\p{N}\s-]/gu, '');
+      filtre.$or = [
+        { titre: { $regex: recherche, $options: 'i' } },
+        { description: { $regex: recherche, $options: 'i' } },
+        { ville: { $regex: recherche, $options: 'i' } },
+      ];
+    }
     if (categorie) filtre.categorie = categorie;
     if (ville) filtre.ville = new RegExp(ville, 'i');
     if (prixMin || prixMax) {
@@ -108,14 +115,21 @@ router.post('/', protect, vendeur, upload.array('images', 5), async (req, res) =
 });
 
 // PUT modifier une annonce
-router.put('/:id', protect, vendeur, async (req, res) => {
+router.put('/:id', protect, vendeur, upload.array('images', 1), async (req, res) => {
   try {
     const annonce = await Annonce.findById(req.params.id);
     if (!annonce) return res.status(404).json({ message: 'Annonce introuvable' });
     if (annonce.utilisateur.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
       return res.status(403).json({ message: 'Non autorisé' });
     }
-    Object.assign(annonce, req.body);
+    const champsModifiables = ['titre', 'description', 'prix', 'categorie', 'ville'];
+    champsModifiables.forEach((champ) => {
+      if (req.body[champ] !== undefined) annonce[champ] = req.body[champ];
+    });
+    if (req.files?.length) {
+      const nouvellePhoto = `/uploads/${req.files[0].filename}`;
+      annonce.images = [nouvellePhoto, ...(annonce.images || []).slice(1)];
+    }
     await annonce.save();
     res.json(annonce);
   } catch (err) {

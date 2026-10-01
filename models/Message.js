@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+﻿const mongoose = require('mongoose');
 
 const messageSchema = new mongoose.Schema(
   {
@@ -10,5 +10,10 @@ const messageSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+messageSchema.index({ expediteur: 1, createdAt: -1 });
+messageSchema.index({ recepteur: 1, createdAt: -1 });
+messageSchema.index({ expediteur: 1, recepteur: 1, createdAt: 1 });
+messageSchema.index({ recepteur: 1, lu: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Message', messageSchema);
