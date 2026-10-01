@@ -1,22 +1,20 @@
 const mongoose = require('mongoose');
 
 const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGO_URI, {
-      dbName: 'SenAnnonce',
-      family: 4,
-      serverSelectionTimeoutMS: 10000
-    });
-    console.log('✅ MongoDB connecté');
-  } catch (err) {
-    console.error('❌ Erreur MongoDB :', err.message);
-    if (err.reason && err.reason.servers) {
-      for (const [server, desc] of err.reason.servers) {
-        console.error(`   → ${server} :`, desc.error?.message || desc.error || 'pas de détail');
-      }
-    }
-    process.exit(1);
+  const mongoUri = process.env.MONGO_URI;
+  if (!mongoUri) {
+    throw new Error('MONGO_URI est absente. Vérifie la configuration du fichier .env.');
   }
+
+  // Ne pas mettre les requêtes en attente si la base n'est pas connectée.
+  mongoose.set('bufferCommands', false);
+  const conn = await mongoose.connect(mongoUri, {
+    dbName: 'SenAnnonce',
+    family: 4,
+    serverSelectionTimeoutMS: 10000,
+  });
+  console.log(`✅ MongoDB connecté : ${conn.connection.host}`);
+  return conn;
 };
 
 module.exports = connectDB;
