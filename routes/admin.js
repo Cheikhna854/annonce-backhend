@@ -11,12 +11,15 @@ router.get('/stats', async (req, res) => {
   try {
     const totalUsers = await User.countDocuments();
     const totalAnnonces = await Annonce.countDocuments();
-    const enAttente = await Annonce.countDocuments({ statut: 'en_attente' });
+    const [jaimeStats] = await User.aggregate([
+      { $project: { nombreFavoris: { $size: { $ifNull: ['$favoris', []] } } } },
+      { $group: { _id: null, total: { $sum: '$nombreFavoris' } } },
+    ]);
     const [signalementStats] = await Annonce.aggregate([
       { $group: { _id: null, total: { $sum: '$signalements' } } },
     ]);
 
-    res.json({ totalUsers, totalAnnonces, enAttente, signalements: signalementStats?.total || 0 });
+    res.json({ totalUsers, totalAnnonces, totalJaime: jaimeStats?.total || 0, signalements: signalementStats?.total || 0 });
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur', error: err.message });
   }
